@@ -1,17 +1,75 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ElderScape Model Editor</title>
-  <link rel="stylesheet" href="./styles.css" />
-  <script defer src="./modelviewer.js"></script>
-  <script defer src="./editor-tools.js"></script>
-  <script>
-    window.ELDERSCAPE_API = "https://elderscape-modelviewer.kbro1989.workers.dev";
-  </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ElderScape AI Model Editor</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #1a1a1a; color: #eee; }
+    textarea { width: 100%; height: 80px; margin-bottom: 10px; padding: 10px; font-size: 16px; }
+    button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+    .response { margin-top: 20px; background: #333; padding: 15px; border-radius: 5px; white-space: pre-wrap; }
+    .response-header { font-weight: bold; margin-bottom: 5px; }
+  </style>
 </head>
-<body class="mv-style">
-  <div id="rsmv_app" class="mv-root"></div>
+<body>
+  <h1>ElderScape AI Model Editor</h1>
+  
+  <textarea id="prompt" placeholder="Enter your command for the AI, e.g. 'Make the dragon glow red'"></textarea>
+  <button id="submitBtn">Send to AI</button>
+
+  <div id="responses"></div>
+
+  <script>
+    const workerUrl = "https://elderscape-modeleditor.kristain33rs.workers.dev/";
+
+    async function sendPrompt() {
+      const prompt = document.getElementById("prompt").value.trim();
+      if (!prompt) return alert("Please enter a prompt.");
+
+      const resDiv = document.getElementById("responses");
+      resDiv.innerHTML = "<p>Loading AI responses...</p>";
+
+      try {
+        const response = await fetch(workerUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt })
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(errText || "Worker returned an error");
+        }
+
+        const data = await response.json();
+
+        // Handle both array and single object responses
+        const items = Array.isArray(data) ? data : [data];
+
+        resDiv.innerHTML = "";
+        items.forEach((item, idx) => {
+          const container = document.createElement("div");
+          container.className = "response";
+
+          const header = document.createElement("div");
+          header.className = "response-header";
+          header.textContent = `Response ${idx + 1}`;
+
+          const body = document.createElement("div");
+          body.textContent = item.response || item.aiResponse || JSON.stringify(item, null, 2);
+
+          container.appendChild(header);
+          container.appendChild(body);
+          resDiv.appendChild(container);
+        });
+
+      } catch (err) {
+        resDiv.innerHTML = `<p style="color:red">Error: ${err.message}</p>`;
+      }
+    }
+
+    document.getElementById("submitBtn").addEventListener("click", sendPrompt);
+  </script>
 </body>
 </html>
