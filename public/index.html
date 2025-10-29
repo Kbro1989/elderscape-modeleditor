@@ -1,75 +1,161 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ElderScape AI Model Editor</title>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 20px; background: #1a1a1a; color: #eee; }
-    textarea { width: 100%; height: 80px; margin-bottom: 10px; padding: 10px; font-size: 16px; }
-    button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
-    .response { margin-top: 20px; background: #333; padding: 15px; border-radius: 5px; white-space: pre-wrap; }
-    .response-header { font-weight: bold; margin-bottom: 5px; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ElderScape AI Model Editor</title>
+<style>
+  body { margin: 0; font-family: Arial, sans-serif; background: #1a1a1a; color: #eee; overflow: hidden; }
+  #ui { position: absolute; top: 20px; left: 20px; width: 320px; z-index: 10; }
+  textarea { width: 100%; height: 80px; margin-bottom: 10px; padding: 10px; font-size: 16px; border-radius: 5px; border: none; resize: none; }
+  button { width: 100%; padding: 10px; font-size: 16px; border-radius: 5px; cursor: pointer; background: #444; color: #fff; border: none; }
+  #responses { margin-top: 10px; max-height: 250px; overflow-y: auto; background: #222; padding: 10px; border-radius: 5px; font-size: 14px; line-height: 1.3em; }
+  .response { margin-bottom: 10px; white-space: pre-wrap; }
+  canvas { display: block; }
+</style>
 </head>
 <body>
-  <h1>ElderScape AI Model Editor</h1>
-  
-  <textarea id="prompt" placeholder="Enter your command for the AI, e.g. 'Make the dragon glow red'"></textarea>
+
+<div id="ui">
+  <textarea id="prompt" placeholder="Enter command, e.g., 'Make dragon glow red'"></textarea>
   <button id="submitBtn">Send to AI</button>
-
   <div id="responses"></div>
+</div>
 
-  <script>
-    const workerUrl = "https://elderscape-modeleditor.kristain33rs.workers.dev/";
+<script src="https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.163.0/examples/js/loaders/GLTFLoader.js"></script>
 
-    async function sendPrompt() {
-      const prompt = document.getElementById("prompt").value.trim();
-      if (!prompt) return alert("Please enter a prompt.");
+<script>
+const workerUrl = "https://elderscape-modeleditor.kristain33rs.workers.dev/";
+const responsesDiv = document.getElementById("responses");
+let scene, camera, renderer, model, mixer, clock = new THREE.Clock();
 
-      const resDiv = document.getElementById("responses");
-      resDiv.innerHTML = "<p>Loading AI responses...</p>";
+// --- Three.js Scene Setup ---
+function initThree() {
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x111111);
 
-      try {
-        const response = await fetch(workerUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt })
-        });
+  camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000);
+  camera.position.set(0, 2, 5);
 
-        if (!response.ok) {
-          const errText = await response.text();
-          throw new Error(errText || "Worker returned an error");
-        }
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
 
-        const data = await response.json();
+  const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+  dirLight.position.set(5, 10, 7.5);
+  scene.add(dirLight);
 
-        // Handle both array and single object responses
-        const items = Array.isArray(data) ? data : [data];
+  const ambientLight = new THREE.AmbientLight(0x404040, 1.5);
+  scene.add(ambientLight);
 
-        resDiv.innerHTML = "";
-        items.forEach((item, idx) => {
-          const container = document.createElement("div");
-          container.className = "response";
+  // Load default RuneScape dragon model
+  const loader = new THREE.GLTFLoader();
+  loader.load('https://cdn.jsdelivr.net/gh/kbro6989/elderscape-assets/dragon.glb', (gltf) => {
+    model = gltf.scene;
+    scene.add(model);
 
-          const header = document.createElement("div");
-          header.className = "response-header";
-          header.textContent = `Response ${idx + 1}`;
-
-          const body = document.createElement("div");
-          body.textContent = item.response || item.aiResponse || JSON.stringify(item, null, 2);
-
-          container.appendChild(header);
-          container.appendChild(body);
-          resDiv.appendChild(container);
-        });
-
-      } catch (err) {
-        resDiv.innerHTML = `<p style="color:red">Error: ${err.message}</p>`;
-      }
+    if (gltf.animations.length) {
+      mixer = new THREE.AnimationMixer(model);
+      gltf.animations.forEach((clip) => mixer.clipAction(clip).play());
     }
+  });
 
-    document.getElementById("submitBtn").addEventListener("click", sendPrompt);
-  </script>
+  animate();
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  const delta = clock.getDelta();
+  if (mixer) mixer.update(delta);
+  if (model) model.rotation.y += 0.005;
+  renderer.render(scene, camera);
+}
+
+// --- Resize Handling ---
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// --- Send AI Prompt ---
+async function sendPrompt() {
+  const prompt = document.getElementById("prompt").value.trim();
+  if (!prompt) return alert("Enter a prompt");
+
+  responsesDiv.innerHTML = "<p>Loading AI response...</p>";
+
+  try {
+    const res = await fetch(workerUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt })
+    });
+
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    const items = Array.isArray(data) ? data : [data];
+    responsesDiv.innerHTML = "";
+
+    items.forEach((item) => {
+      const div = document.createElement("div");
+      div.className = "response";
+      div.textContent = item.response || JSON.stringify(item, null, 2);
+      responsesDiv.appendChild(div);
+
+      // Parse AI instructions for live changes
+      parseModelInstructions(item.response);
+    });
+
+  } catch (err) {
+    responsesDiv.innerHTML = `<p style="color:red">${err.message}</p>`;
+  }
+}
+
+// --- Simple AI Instruction Parser ---
+function parseModelInstructions(text) {
+  if (!model || !text) return;
+
+  // Glow red
+  if (/glow red/i.test(text)) {
+    model.traverse((child) => {
+      if (child.isMesh) {
+        child.material.emissive = new THREE.Color(0xff0000);
+        child.material.emissiveIntensity = 0.8;
+      }
+    });
+  }
+
+  // Glow blue
+  if (/glow blue/i.test(text)) {
+    model.traverse((child) => {
+      if (child.isMesh) {
+        child.material.emissive = new THREE.Color(0x0000ff);
+        child.material.emissiveIntensity = 0.8;
+      }
+    });
+  }
+
+  // Example: Scale
+  const scaleMatch = text.match(/scale (\d+(\.\d+)?)/i);
+  if (scaleMatch) {
+    const s = parseFloat(scaleMatch[1]);
+    model.scale.set(s, s, s);
+  }
+
+  // Example: Rotate Y by degrees
+  const rotateMatch = text.match(/rotate y (\d+(\.\d+)?)/i);
+  if (rotateMatch) {
+    const deg = parseFloat(rotateMatch[1]);
+    model.rotation.y = THREE.MathUtils.degToRad(deg);
+  }
+}
+
+document.getElementById("submitBtn").addEventListener("click", sendPrompt);
+
+initThree();
+</script>
+
 </body>
 </html>
