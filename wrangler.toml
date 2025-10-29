@@ -1,4 +1,4 @@
-﻿name = "elderscape-modelviewer"
+name = "elderscape-modelviewer"
 main = "workers/ai-editor.ts"
 compatibility_date = "2025-10-28"
 
@@ -16,3 +16,13 @@ database_name = "elderscape-d1"
 
 [ai]
 binding = "AI"
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
