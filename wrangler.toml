@@ -1,4 +1,4 @@
-name = "elderscape-modelviewer"
+name = "elderscape-modeleditor"
 main = "workers/ai-editor.ts"
 compatibility_date = "2025-10-28"
 
